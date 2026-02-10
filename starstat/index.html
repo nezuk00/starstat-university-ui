@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="color-scheme" content="dark light" />
+  <title>StarStat — Offline UI</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Tektur:wght@500;600;700;800&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="./styles.css"/>
+  <script src="./config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+
+<body>
+  <!-- NOTE: Подробные заметки по структуре проекта см. в README_GUIDE_RU.md -->
+  <!-- Там расписано: где менять отступы/размеры/темы/футер/шум/графики и логика Starosta/Support -->
+  <!-- Background -->
+  <div class="bg" aria-hidden="true">
+    <div class="bg-top"></div>
+<div class="bg-wave"></div>
+    <div class="bg-wave2"></div>
+    <div class="bg-grid"></div>
+    <div class="bg-noise"></div>
+    <div class="bg-vignette"></div>
+  </div>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="page-transition" id="pageTransition" aria-hidden="true"></div>
+  <div class="full-overlay" id="fullOverlay" aria-hidden="true"></div>
+
+  <!-- Topbar (виден после входа) -->
+  <header class="topbar hidden" id="topbar">
+    <div class="brand">
+      <span class="brand-dot"></span>
+      <span class="brand-text">RUDN · StarStat</span>
+    </div>
+
+    <nav class="nav" id="topNav">
+      <button class="nav-btn is-active" data-tab="overview">ОБЩАЯ СТАТИСТИКА</button>
+      <button class="nav-btn" data-tab="dates">ПО ДАТАМ</button>
+      <button class="nav-btn" data-tab="pairs">ПО ПАРАМ</button>
+      <!-- Кнопки STAROSTA / SUPPORT добавит app.js автоматически по роли -->
+    </nav>
+
+    <div class="top-actions">
+      <button class="icon-btn" id="btn-settings" title="Настройки">⚙</button>
+      <button class="pill-btn" id="btn-logout">Выйти</button>
+    </div>
+  </header>
+
+  <!-- Landing screen -->
+  <main class="screen landing" id="screen-landing">
+    <!-- Landing settings (theme) — спрятано в меню настроек справа сверху -->
+    <button class="icon-btn landing-settings-btn" id="btn-landing-settings" title="Настройки" aria-label="Настройки">⚙</button>
+    <div class="landing-wrap">
+      <div class="landing-title">
+        <div class="landing-line"></div>
+        <div class="landing-eyebrow">Добро пожаловать в</div>
+        <div class="landing-word">
+          <span class="landing-accent-line top"></span>
+          <span class="landing-accent-line bottom"></span>
+          <span class="landing-logo">STARSTAT</span>
+        </div>
+        <div class="landing-sub">
+          Сайт предназначенный для ведения посещаемости, домашних<br/>
+          заданий и успеваемости
+        </div>
+      </div>
+
+      <div class="landing-actions">
+        <button class="pill-btn landing-enter" id="btn-enter">Войти</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Landing settings modal (only theme) -->
+  <div class="modal hidden" id="landingSettingsModal" aria-hidden="true">
+    <div class="modal-backdrop" data-close-landing-settings="1"></div>
+    <div class="modal-card glass settings-modal">
+      <div class="modal-head">
+        <div class="modal-title">Настройки</div>
+        <button class="x-btn" data-close-landing-settings="1" aria-label="Закрыть"></button>
+      </div>
+      <div class="modal-body">
+        <div class="kv" style="border-bottom:0; padding-bottom:0;">
+          <div class="k">Тема</div>
+          <div class="v">
+            <div class="theme-toggle" aria-label="Переключение темы">
+              <button class="theme-btn" id="themeDarkLanding" title="Тёмная" aria-label="Тёмная">🌙</button>
+              <button class="theme-btn" id="themeLightLanding" title="Светлая" aria-label="Светлая">✦</button>
+            </div>
+          </div>
+        </div>
+        <div class="muted mt8">Тема сохраняется локально в браузере.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Student screen (личная статистика) -->
+  <main class="screen student hidden" id="screen-student">
+    <section class="wrap student-wrap">
+      <section class="filters glass">
+        <div class="field">
+          <label>Группа</label>
+          <input id="studentGroup" class="input" type="text" disabled />
+        </div>
+
+        <div class="field">
+          <label>Период с</label>
+          <input id="studentDateFrom" class="input" type="date"/>
+        </div>
+
+        <div class="field">
+          <label>Период по</label>
+          <input id="studentDateTo" class="input" type="date"/>
+        </div>
+
+        <div class="field">
+          <label>Предмет</label>
+          <select id="studentSubjectSelect" class="input"></select>
+        </div>
+
+        <div class="field field-btn">
+          <label>&nbsp;</label>
+          <button class="pill-btn" id="btn-student-refresh">Обновить</button>
+        </div>
+
+        <div class="hint" id="studentHint">Личная статистика</div>
+      </section>
+
+      <div class="cards">
+        <div class="card glass">
+          <div class="card-title">Посещаемость</div>
+          <div class="donut">
+            <canvas id="studDonutAttendance"></canvas>
+            <div class="donut-center">
+              <div class="donut-big" id="studAttendancePercent">—</div>
+              <div class="donut-sub">посещаемость</div>
+            </div>
+          </div>
+          <div class="mini-legend">● присутствовал &nbsp;&nbsp; ● отсутствовал</div>
+        </div>
+
+        <div class="card glass">
+          <div class="card-title">Посещено</div>
+          <div class="donut">
+            <canvas id="studDonutVisited"></canvas>
+            <div class="donut-center">
+              <div class="donut-big" id="studVisitedRatio">—</div>
+              <div class="donut-sub">пар</div>
+            </div>
+          </div>
+          <div class="mini-legend">● присутствовал &nbsp;&nbsp; ● отсутствовал</div>
+        </div>
+
+        <div class="card glass">
+          <div class="card-title">Всего пропусков</div>
+          <div class="donut">
+            <canvas id="studDonutAbsences"></canvas>
+            <div class="donut-center">
+              <div class="donut-big" id="studAbsencesTotal">—</div>
+              <div class="donut-sub">пропуска</div>
+            </div>
+          </div>
+          <div class="mini-legend">● по болезни &nbsp;&nbsp; ● уважительная &nbsp;&nbsp; ● прогул</div>
+        </div>
+      </div>
+
+      <div class="chart glass glass-section" id="studTableSection">
+        <div class="chart-head">
+          <div>
+            <div class="chart-title">Статистика по датам</div>
+            <div class="chart-sub">дата · день недели · статус</div>
+          </div>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <button class="icon-btn small" id="studExpandBtn" title="Развернуть" aria-label="Развернуть">⛶</button>
+            <button class="x-btn" id="studCloseFullBtn" title="Закрыть" aria-label="Закрыть" style="display:none"></button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="table" id="studTable">
+            <thead>
+              <tr>
+                <th>Дата</th>
+                <th>День недели</th>
+                <th>Статус</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Dashboard screen -->
+  <main class="screen dashboard hidden" id="screen-dashboard">
+    <section class="wrap">
+      <section class="filters glass">
+        <div class="field">
+          <label>Группа</label>
+          <select id="groupSelect" class="input"></select>
+        </div>
+
+        <div class="field">
+          <label>Период с</label>
+          <input id="dateFrom" class="input" type="date"/>
+        </div>
+
+        <div class="field">
+          <label>Период по</label>
+          <input id="dateTo" class="input" type="date"/>
+        </div>
+
+        <div class="field">
+          <label>Предмет</label>
+          <select id="subjectSelect" class="input"></select>
+        </div>
+
+        <div class="field field-btn">
+          <label>&nbsp;</label>
+          <button class="pill-btn" id="btn-refresh">Обновить</button>
+        </div>
+
+        <div class="hint" id="roleHint">Не авторизован</div>
+      </section>
+
+      <div class="panel-stack">
+        <!-- OVERVIEW -->
+        <section class="panel is-active" id="panel-overview">
+          <div class="cards">
+            <div class="card glass">
+              <div class="card-title">Общая посещаемость</div>
+              <div class="donut">
+                <canvas id="donutAttendance"></canvas>
+                <div class="donut-center">
+                  <div class="donut-big" id="attendancePercent">—</div>
+                  <div class="donut-sub">посещаемость</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card glass">
+              <div class="card-title">Статусы посещаемости</div>
+              <div class="donut">
+                <canvas id="donutStatuses"></canvas>
+                <div class="donut-center">
+                  <div class="donut-big" id="totalMarks">—</div>
+                  <div class="donut-sub">отметок</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card glass">
+              <div class="card-title">Всего пар</div>
+              <div class="donut">
+                <canvas id="donutPairs"></canvas>
+                <div class="donut-center">
+                  <div class="donut-big" id="totalPairs">—</div>
+                  <div class="donut-sub">всего пар</div>
+                </div>
+              </div>
+              <div class="mini-legend">● количество пар</div>
+            </div>
+          </div>
+
+          <div class="chart glass">
+            <div class="chart-head">
+              <div class="chart-title">Динамика по дням</div>
+              <div class="chart-sub">присутствовали / отсутствовали</div>
+            </div>
+            <canvas id="lineByDates"></canvas>
+          </div>
+        </section>
+
+        <!-- DATES -->
+        <section class="panel" id="panel-dates">
+          <div class="chart glass">
+            <div class="chart-head">
+              <div class="chart-title">Статистика по датам</div>
+              <div class="chart-sub">таблица</div>
+            </div>
+            <div class="table-wrap">
+              <table class="table" id="tableDates">
+                <thead>
+                  <tr>
+                    <th>Дата</th>
+                    <th>День недели</th>
+                    <th>Присутствовали</th>
+                    <th>Отсутствовали</th>
+                    <th>Болели</th>
+                    <th>Уважительная</th>
+                    <th>Всего</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- PAIRS -->
+        <section class="panel" id="panel-pairs">
+          <div class="chart glass">
+            <div class="chart-head">
+              <div class="chart-title">Статистика по парам</div>
+              <div class="chart-sub">агрегация по номеру пары</div>
+            </div>
+            <canvas id="barByPairs"></canvas>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <!-- STAROSTA и SUPPORT экраны создаются автоматически в app.js (если их нет в HTML) -->
+
+  <!-- Login modal -->
+  <div class="modal hidden" id="loginModal" aria-hidden="true">
+    <div class="modal-backdrop" data-close="1"></div>
+    <div class="modal-card glass">
+      <div class="modal-head">
+        <div class="modal-title">Вход</div>
+        <button class="x-btn" data-close="1" aria-label="Закрыть"></button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label>Логин</label>
+          <input class="input" id="loginUsername" placeholder="username"/>
+        </div>
+        <div class="field">
+          <label>Пароль</label>
+          <input class="input" id="loginPassword" placeholder="password" type="password"/>
+        </div>
+        <div class="row">
+          <button class="pill-btn" id="btn-login-submit">Войти</button>
+          <div class="muted" id="loginError"></div>
+        </div>
+        <div class="muted mt8">
+          Демо: supadmin/supadmin123 · admin/admin123 · starosta/starosta123 · support/support123 · designer/demo
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Superadmin settings modal -->
+  <div class="modal hidden" id="superadminModal" aria-hidden="true">
+    <div class="modal-backdrop" data-close-superadmin="1"></div>
+    <div class="modal-card glass admin-modal settings-modal">
+      <div class="admin-head">
+        <div class="admin-title">
+          <span class="admin-gear">⚙</span>
+          <span>Настройки суперадмина</span>
+        </div>
+        <div class="admin-head-actions">
+          <div class="theme-toggle" aria-label="Переключение темы">
+            <button class="theme-btn" id="themeDarkSa" title="Тёмная" aria-label="Тёмная">🌙</button>
+            <button class="theme-btn" id="themeLightSa" title="Светлая" aria-label="Светлая">✦</button>
+          </div>
+          <button class="x-btn" data-close-superadmin="1" aria-label="Закрыть"></button>
+        </div>
+      </div>
+
+      <div class="admin-tabs">
+        <button class="admin-tab is-active" data-admin-tab="groups">Группы</button>
+        <button class="admin-tab" data-admin-tab="students">Студенты</button>
+        <button class="admin-tab" data-admin-tab="schedule">Расписание</button>
+        <button class="admin-tab" data-admin-tab="assign">Назначения</button>
+        <button class="admin-tab" data-admin-tab="users">Пользователи</button>
+      </div>
+
+      <div class="admin-body">
+        <!-- Groups -->
+        <div class="admin-panel is-active" id="admin-groups">
+          <div class="admin-sub">Управление группами</div>
+          <div class="admin-row">
+            <input class="input admin-input-wide" id="saGroupName" placeholder="Название группы"/>
+            <button class="pill-btn" id="saAddGroup">Добавить группу</button>
+          </div>
+          <div class="admin-list" id="saGroupsList"></div>
+        </div>
+
+        <!-- Students -->
+        <div class="admin-panel" id="admin-students">
+          <div class="admin-sub">Управление студентами</div>
+          <div class="admin-row">
+            <input class="input admin-input" id="saStudentName" placeholder="ФИО студента"/>
+            <select class="input admin-input" id="saStudentGroup"></select>
+            <button class="pill-btn" id="saAddStudent">Добавить студента</button>
+          </div>
+          <div class="admin-row">
+            <select class="input admin-input-wide" id="saStudentsViewGroup"></select>
+            <button class="pill-btn danger" id="saDeleteStudent">Удалить (выбранного)</button>
+          </div>
+          <div class="admin-list" id="saStudentsList"></div>
+        </div>
+
+        <!-- Schedule -->
+        <div class="admin-panel" id="admin-schedule">
+          <div class="admin-sub">Управление расписанием (демо)</div>
+          <div class="admin-row">
+            <select class="input admin-input-wide" id="saScheduleGroup"></select>
+            <button class="pill-btn" id="saSeedSchedule">Сгенерировать демо</button>
+          </div>
+          <div class="admin-row day-tabs" id="saScheduleDays">
+            <button class="day-chip is-active" data-day="Понедельник">Пн</button>
+            <button class="day-chip" data-day="Вторник">Вт</button>
+            <button class="day-chip" data-day="Среда">Ср</button>
+            <button class="day-chip" data-day="Четверг">Чт</button>
+            <button class="day-chip" data-day="Пятница">Пт</button>
+            <button class="day-chip" data-day="Суббота">Сб</button>
+            <button class="day-chip" data-day="Воскресенье">Вс</button>
+          </div>
+          <div class="admin-list" id="saScheduleList"></div>
+        </div>
+
+        <!-- Assign -->
+        <div class="admin-panel" id="admin-assign">
+          <div class="admin-sub">Назначение администраторов на группы</div>
+          <div class="admin-row">
+            <select class="input admin-input" id="saAssignUser"></select>
+            <select class="input admin-input" id="saAssignGroup"></select>
+            <button class="pill-btn" id="saAssign">Назначить</button>
+          </div>
+          <div class="admin-list" id="saAssignList"></div>
+        </div>
+
+        <!-- Users -->
+        <div class="admin-panel" id="admin-users">
+          <div class="admin-sub">Управление пользователями</div>
+          <div class="admin-row">
+            <input class="input admin-input" id="saUserName" placeholder="Имя пользователя"/>
+            <input class="input admin-input" id="saUserPass" placeholder="Пароль"/>
+            <select class="input admin-input" id="saUserRole">
+              <option value="superadmin">Суперадминистратор</option>
+              <option value="admin">Администратор</option>
+            </select>
+            <button class="pill-btn" id="saAddUser">Добавить пользователя</button>
+          </div>
+          <div class="admin-list" id="saUsersList"></div>
+        </div>
+
+        <!-- Access denied -->
+        <div class="admin-panel" id="admin-denied">
+          <div class="admin-sub">Доступ запрещён</div>
+          <div class="muted">Эта панель доступна только роли <b>superadmin</b>. Войдите как <b>supadmin / supadmin123</b> для просмотра.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Profile modal -->
+  <div class="modal hidden" id="profileModal" aria-hidden="true">
+    <div class="modal-backdrop" data-close-profile="1"></div>
+    <div class="modal-card glass settings-modal">
+      <div class="modal-head">
+        <div class="modal-title">Профиль</div>
+        <button class="x-btn" data-close-profile="1" aria-label="Закрыть"></button>
+      </div>
+      <div class="modal-body">
+        <div class="kv"><div class="k">Пользователь</div><div class="v" id="profileUser">—</div></div>
+        <div class="kv"><div class="k">Роль</div><div class="v" id="profileRole">—</div></div>
+        <div class="kv"><div class="k">Режим</div><div class="v">OFFLINE (демо-данные)</div></div>
+        <div class="kv">
+          <div class="k">Тема</div>
+          <div class="v">
+            <div class="theme-toggle" aria-label="Переключение темы">
+              <button class="theme-btn" id="themeDark" title="Тёмная" aria-label="Тёмная">🌙</button>
+              <button class="theme-btn" id="themeLight" title="Светлая" aria-label="Светлая">✦</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast hidden" id="toast"></div>
+
+  
+  <!-- Support chat widget (на всех страницах) -->
+  <button class="chat-fab" id="chatFab" title="Техподдержка" aria-label="Техподдержка">
+    <span>💬</span>
+  </button>
+
+  <div class="support-chat hidden" id="supportChat" role="dialog" aria-label="Чат поддержки">
+    <div class="support-card glass">
+      <div class="support-head">
+        <div class="support-prompt">Добрый день! Чем могу помочь?</div>
+        <button class="x-btn" id="chatClose" aria-label="Закрыть"></button>
+      </div>
+      <div class="support-body" id="chatBody">
+        <div class="msg msg-bot">
+          <div class="bubble">Привет! Это демо-чат (без сервера). Можешь написать любое сообщение 🙂</div>
+        </div>
+      </div>
+      <div class="support-foot">
+        <input class="support-input" id="chatInput" placeholder="Напишите сообщение..." />
+        <button class="support-send" id="chatSend" aria-label="Отправить">➤</button>
+      </div>
+    </div>
+  </div>
+
+<!-- Footer (на всех экранах) -->
+  <footer class="site-footer">
+  <div class="footer-shell">
+    <div class="footer-inner">
+      <div class="footer-col">
+        <div class="footer-title">ФИИ РУДН · StarStat</div>
+        <div class="footer-text">Внутренний сервис для старост и администраторов: посещаемость, пары и сводная статистика.</div>
+      </div>
+      <div>
+        <div class="footer-title">Навигация</div>
+        <a class="footer-link" href="#" onclick="return false;">Общая статистика</a>
+        <a class="footer-link" href="#" onclick="return false;">По датам</a>
+        <a class="footer-link" href="#" onclick="return false;">По парам</a>
+      </div>
+      <div>
+        <div class="footer-title">Контакты</div>
+        <div class="footer-text">fiirudn@rudn.ru<br/>+7 (495) 434-53-00<br/>Москва, ул. Миклухо-Маклая, 6</div>
+      </div>
+      <div>
+        <div class="footer-title">Поддержка</div>
+        <div class="footer-text">Если что-то не работает — напишите в чат на главной или обратитесь к администратору группы.</div>
+      </div>
+    </div>
+    <div class="footer-bottom">© 2026 RUDN · Faculty of Artificial Intelligence · StarStat (offline demo)</div>
+  
+  </div>
+</footer>
+
+  <script src="./app.js"></script>
+</body>
+</html>
